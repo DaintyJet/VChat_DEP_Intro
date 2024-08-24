@@ -25,38 +25,38 @@ When the program is loaded into memory and Hardware-enforced DEP is enabled, the
 This means when DEP is enabled, our program can not load and execute instructions from a process's default stack or heap unless we make some changes to the memory pages they are located in. If an application has to run code from other memory pages, it must either allocate memory pages with a function like [`VirtualAlloc(...)`](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualalloc) and set the proper virtual memory protection attributes, namely one of PAGE_EXECUTE, PAGE_EXECUTE_READ, PAGE_EXECUTE_READWRITE, or PAGE_EXECUTE_WRITECOPY [4]. Additionally, as we have done in the [VChat ROP](https://github.com/DaintyJet/VChat_TRUN_ROP) and [VChat CFG](https://github.com/DaintyJet/VChat_CFG) exploits, we can use the `VirtualProtect(...)`(https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-virtualprotect) function to change the protections on a region of memory that has already been loaded such as the process's stack.
 
 > [!NOTE]
-> Allocations made with [`malloc(...)`](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/malloc?view=msvc-170) or [HeapAlloc(...)](https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapalloc) are non-executable and do not contain the necessary arguments or flags to change the protections when allocating memory. It should be noted that you can still use `VirtualProtect` on regions of memory these allocations occur in.
+> Allocations made with [`malloc(...)`](https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/malloc?view=msvc-170) or [HeapAlloc(...)](https://learn.microsoft.com/en-us/windows/win32/api/heapapi/nf-heapapi-heapalloc) are non-executable and do not contain the necessary arguments or flags to change the protections when allocating memory. It should be noted that you can still use `VirtualProtect` on regions of memory where these allocations occur.
 
 If we were to try and set the Instruction Pointer (EIP, RIP, etc) to a location in memory which is within a section not marked as executable, and therefore has the NX-bit of the memory page set, then the processor will raise an exception with the code `STATUS_ACCESS_VIOLATION` when we attempt to load and execute the instruction [2][4].
 
 > [!NOTE]
 > Most modern CPUs will have some kind of support for the NX-bit used to enable DEP protections, though you may find modern low-power and low-cost chips used in embedded systems may not contain this addition.
 >
-> It should be noted that old X86 processes without Physical Address Extension (PAE) addresses do not support DEP on Windows [2]. It should also be noted that the original PE file format contained the characteristic flag `IMAGE_SCN_CNT_CODE` to specify a section as executable [9]. This means as long as the compiler and linker used to create an executable properly marked the `.text` section as executable, then DEP can be used on old Windows executables even though they were created at a time when the Hardware did not support this kind of protection. 
+> It should be noted that old X86 processes without Physical Address Extension (PAE) addresses do not support DEP on Windows [2]. It should also be noted that the original PE file format contained the characteristic flag `IMAGE_SCN_CNT_CODE` to specify a section as executable [9]. This means as long as the compiler and linker used to create an executable properly marked the `.text` section as executable; then DEP can be used on old Windows executables even though they were created at a time when the Hardware did not support this kind of protection. 
 
 
 ## Software Based DEP
-Software-based DEP is, at least on Windows XP systems, enabled on core operating system components and services [2][5]. However, it should be noted that Software-Based DEP only supports "limited system binaries regardless of the hardware-enforced DEP capabilities of the processor" [2][5]. This is because it is designed to protect the Exception Handling mechanisms in a Windows process; when this was introduced, this meant protecting SEH chains. 
+Software-based DEP is, at least on Windows XP systems, enabled on core operating system components and services [2][5]. However, it should be noted that Software-Based DEP only supports "limited system binaries regardless of the hardware-enforced DEP capabilities of the processor" [2][5]. This is because it is designed to protect the exception handling mechanisms in a Windows process; when this was introduced, it meant protecting SEH chains. 
 
 If the executable was compiled with SafeSEH, software-based DEP ensures that the handler in the SEH chain contains a pointer to a valid location in memory that is part of the registered function table. If SafeSEH is not enabled, software-based DEP ensures that the pointer contains a location in memory that is marked as executable.
 
 > [!NOTE]
-> There are implementations for the Linux Kernel to emulate NX-bit hardware support on more than just exception handling as is done in Windows. One such example is the [PaX](https://en.wikipedia.org/wiki/Executable-space_protection#PaX:~:text=May%202%2C%202003-,PaX,-%5Bedit%5D) system. As we are focusing on Windows, this will not have any further discussion but is brought up to show that we can emulate NX-Protections on legacy hardware. 
+> There are implementations for the Linux Kernel to emulate NX-bit hardware support on more than just exception handling, as is done in Windows. One such example is the [PaX](https://en.wikipedia.org/wiki/Executable-space_protection#PaX:~:text=May%202%2C%202003-,PaX,-%5Bedit%5D) system. As we are focusing on Windows, there will not be any further discussion, but it is brought up to show that we can emulate NX-Protections on legacy hardware. 
 
 
 ## Exceptions and Considerations
-There are a few possible exceptions to the application of DEP on a process. The first is for those processes that use Just In Time (JIT) Compilers, as these may compile and write code into the memory of the process space and then attempt to execute it, if the region the JIT compiler writes to is not properly managed and the protections of the page with are not set to allow execution (With `VirtualProtect(...)`), then there will be issues when running the program as exceptions will be raised when that code is attempted to be executed [2] [4]. An additional thing to note is that some binaries may place chunks of executable code in a data section, these are referred to as *thunks* which are generally small pieces of code that take some small action and then jump to an intended target [4]. Generally, these programs should 
+There are a few possible exceptions to the application of DEP on a process. The first is for those processes that use Just In Time (JIT) Compilers, as these may compile and write code into the memory of the process space and then attempt to execute it if the region the JIT compiler writes to is not properly managed and the protections of the page with are not set to allow execution (With `VirtualProtect(...)`), then there will be issues when running the program as exceptions will be raised when that code is attempted to be executed [2] [4]. An additional thing to note is that some binaries may place chunks of executable code in a data section, these are referred to as *thunks* which are generally small pieces of code that take some small action and then jump to an intended target [4]. Generally, these programs should 
 
-If you do make a region of memory executable when allocating it with `VirtualAlloc(...)`, or if you mark an existing region of memory as executable using `VirtualProtect(...)`, then you should be sure to remove write permissions when possible. This is because, if we make a writable and executable region of memory that can be accesses by an attacker, as we have seen throughout the VChat functions it can be quite dangerous as it can allow and enable arbitrary code execution.
+If you do make a region of memory executable when allocating it with `VirtualAlloc(...)`, or if you mark an existing region of memory as executable using `VirtualProtect(...)`, then you should be sure to remove write permissions when possible. This is because if we make a writable and executable region of memory that can be accessed by an attacker, as we have seen throughout the VChat functions, it can be quite dangerous as it can allow and enable arbitrary code execution.
 
 ## Enabling DEP 
 This section will cover the process used to enable DEP on a system-wide level and on a per-process basis. 
 
 ### DEP Policies
-We can modify the DEP policy applied to the system with the [`bcdedit`](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/bcdedit) command line tool, there are four options encoded with the values [0, 3]. This **Does Not** need to be done for this exercise, but is included for completeness.
+We can modify the DEP policy applied to the system with the [`bcdedit`](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/bcdedit) command line tool, there are four options encoded with the values [0, 3]. This **Does Not** need to be done for this exercise but is included for completeness.
 
 > [!IMPORTANT]
-> `bcdedit` modifies your Boot configuration files, so you need to be careful and if you do this on a machine that has Bitlocker enabled you must ensure you have access to the Bitlocker key otherwise you may lose access to the system.
+> `bcdedit` modifies your Boot configuration files, so you need to be careful, and if you do this on a machine that has Bitlocker enabled, you must ensure you have access to the Bitlocker key; otherwise, you may lose access to the system.
 
 The following list describes the possible policies we can apply to the system:
 * `AlwaysOff`: Value of **0**, DEP is not enabled for *any* process.
@@ -111,7 +111,7 @@ Before modifying your system settings, make sure you have all of the required ke
 
 ### Processes Level
 
-In order for DEP to be properly utilized the program being executed should be Linked with the [`/NXCOMPAT`](https://learn.microsoft.com/en-us/cpp/build/reference/nxcompat-compatible-with-data-execution-prevention?view=msvc-170) flag, if you have specified that DEP is always on in the system's boot configuration then this flag has no effect, the same is true if you have configured the system with DEP set to always off. We will show the basics for enabling DEP with the `/NXCOMPAT` flag in Visual Studio.
+In order for DEP to be properly utilized, the program being executed should be Linked with the [`/NXCOMPAT`](https://learn.microsoft.com/en-us/cpp/build/reference/nxcompat-compatible-with-data-execution-prevention?view=msvc-170) flag. If you have specified that DEP is always on in the system's boot configuration, then this flag has no effect. The same is true if you have configured the system with DEP set to always off. We will show the basics for enabling DEP with the `/NXCOMPAT` flag in Visual Studio.
 
 1. Open a Visual Studio Project, in this case I opened VChat.
 2. Open the Project Properties settings.
@@ -127,7 +127,7 @@ In order for DEP to be properly utilized the program being executed should be Li
     <img src="Images/P3.png">
 
 
-We can also programmatically set the DEP protections on a 32-bit process with the `SetProcessDEPPolicy(...)` function. If you attempt to use this function within a 64-bit process the function will fail with an error `ERROR_NOT_SUPPORTED` [9]. Additionally this function will only succeeded on systems where the DEP policy was set to *OptIn* or *OptOut*, if it has been set to *AlwaysOn* or *AlwaysOff* the call will first return with an error and all subsequent calls will be ignored [9].  
+We can also programmatically set the DEP protections on a 32-bit process with the `SetProcessDEPPolicy(...)` function. If you attempt to use this function within a 64-bit process, the function will fail with an error `ERROR_NOT_SUPPORTED` [9]. Additionally this function will only succeeded on systems where the DEP policy was set to *OptIn* or *OptOut*, if it has been set to *AlwaysOn* or *AlwaysOff* the call will first return with an error and all subsequent calls will be ignored [9].  
 
 The function has the following signature and will return `TRUE` if it succeeds and `FALSE` if it fails:
 ```
@@ -226,7 +226,7 @@ The [`wbmtest`](https://learn.microsoft.com/en-us/mem/configmgr/develop/core/und
    * Click Cancel to exit it without changing anything.
 
 ### Examine Processes Running DEP with Task Manager
-Now we will use Task-Manager's detailed view to examine which programs and services have DEP enabled on the system. As Task Manager is installed on all Windows systems this provides an easy and simple method to see which processes have DEP enabled.
+We will use Task-Manager's detailed view to examine which programs and services have DEP enabled on the system. As Task Manager is installed on all Windows systems this provides an easy and simple method to see which processes have DEP enabled.
 
 1. Open VChat with DEP disabled.
 
@@ -240,7 +240,7 @@ Now we will use Task-Manager's detailed view to examine which programs and servi
 
     <img src="Images/E14.png">
 
-4. Right-click an empty space and select *Select Columns*.
+4. Right-click an empty space in line with the column headers and click *Select Columns*.
 
     <img src="Images/E15.png">
 
@@ -253,7 +253,7 @@ Now we will use Task-Manager's detailed view to examine which programs and servi
     <img src="Images/E17.png">
 
 ### Examine Processes Running DEP with Process Explorer
-Now we will use [Process Explorer](https://learn.microsoft.com/en-us/sysinternals/downloads/process-explorer) to view which processes on the system have DEP enabled. Process Explorer is part of Windows's Sysinternals suite of tools. This can be likened to a much more powerful version of Task Manager, providing a great deal of information on individual processes and their children.
+Now, we will use [Process Explorer](https://learn.microsoft.com/en-us/sysinternals/downloads/process-explorer) to view which processes on the system have DEP enabled. Process Explorer is part of Windows's Sysinternals suite of tools. This can be likened to a much more powerful version of Task Manager, providing a great deal of information on individual processes and their children.
 
 1. Open VChat with DEP disabled.
 
@@ -271,7 +271,7 @@ Now we will use [Process Explorer](https://learn.microsoft.com/en-us/sysinternal
 
     <img src="Images/E20.png">
 
-5. Again we can sort by DEP and view those processes that have it Disabled or Enabled. 
+5. Again, we can sort by DEP and view those processes that have it Disabled or Enabled. 
 
     <img src="Images/E21.png">
 
@@ -299,12 +299,12 @@ This section will discuss the use of [`dumpbin`](https://learn.microsoft.com/en-
 
     <img src="Images/E24.png">
 
-4. You should look for the string *NX Compatible*, to speed things up since we know whether this was compiled with DEP or not we can us the following command to search for *NX*, if there is no output we know this was not compiled with support for DEP:
+4. You should look for the string *NX Compatible*. To speed things up, since we know whether this was compiled with DEP or not we can us the following command to search for *NX*; if there is no output, we know this was not compiled with support for DEP:
 
     ```
     $ dumpbin /headers .\VChat.exe | FINDSTR NX
     ```
-    * We pipe the the output of dumpbin into the `FINDSTR` command!
+    * We pipe the output of the dump bin into the `FINDSTR` command!
 
 5. Enable DEP and Recompile VChat if you did not see any results from the above command. 
 6. Re-run the `dumpbin` command and search for the entry *NX Compatible* which can be found under [*DLL Characteristics*](https://learn.microsoft.com/en-us/windows/win32/debug/pe-format#dll-characteristics) in the Optional Header of the PE File.
