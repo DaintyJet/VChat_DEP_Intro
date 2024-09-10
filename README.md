@@ -1,5 +1,6 @@
 # Data Execution Protection
-*Notice*: Originally based off notes from [llan-OuO](https://github.com/llan-OuO).
+>[!NOTE]
+> Originally based off notes from [llan-OuO](https://github.com/llan-OuO).
 ---
 > Prevents code from being run from data-only memory pages. - Microsoft
 
