@@ -8,8 +8,7 @@ Data execution protection (DEP) for Windows is a system-level defense mechanism 
 
 DEP provides this protection by including additional checks at runtime. In the case of [Hardware Based DEP](#hardware-based-dep), these protections are implemented and, therefore, must be supported at the Hardware Level; this support is provided by the CPU and its Memory Management Unit (MMU). [Software Based DEP](#software-based-dep) is also a runtime protection; however, it is very limited in its nature. 
 
-Both 64-bit and 32-bit executables have DEP enabled by default. DEP for 64-bit executables cannot be disabled, while DEP for 32-bit executables can be disabled on a per-process basis [1]. Additionally, the `/NXCOMPAT` flag, which is used to set if DEP is utilized or not for a given executable, is enabled by default in the Visual Studio Linker when using the GUI. At the system level, DEP is " configured at boot according to the no-execute page protection policy setting in the boot configuration data.", and we can at runtime use the [`SetProcessDEPPolicy(...)`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setprocessdeppolicy) function in 32-bit programs to control this on a per-process basis [4], we discuss this configuration further in the [Enabling DEP](#enabling-dep) section. 
-
+Both 64-bit and 32-bit executables have DEP enabled by default. DEP for 64-bit executables cannot be disabled, while DEP for 32-bit executables can be disabled on a per-process basis [1]. Additionally, the `/NXCOMPAT` flag, which is used to specify if DEP should be utilized or not for a given executable, is enabled by default in the Visual Studio Linker when using the GUI. At the system level, DEP is " configured at boot according to the no-execute page protection policy setting in the boot configuration data.", and we can at runtime use the [`SetProcessDEPPolicy(...)`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setprocessdeppolicy) function in 32-bit programs to control this on a per-process basis [4], we discuss this configuration further in the [Enabling DEP](#enabling-dep) section. 
 
 
 > DEP prevents memory that was not explicitly allocated as executable from being executed. [1]
@@ -46,7 +45,7 @@ If the executable was compiled with SafeSEH, software-based DEP ensures that the
 
 
 ## Exceptions and Considerations
-There are a few possible exceptions to the application of DEP on a process. The first is for those processes that use Just In Time (JIT) Compilers, as these may compile and write code into the memory of the process space and then attempt to execute it if the region the JIT compiler writes to is not properly managed and the protections of the page with are not set to allow execution (With `VirtualProtect(...)`), then there will be issues when running the program as exceptions will be raised when that code is attempted to be executed [2] [4]. An additional thing to note is that some binaries may place chunks of executable code in a data section, these are referred to as *thunks* which are generally small pieces of code that take some small action and then jump to an intended target [4]. Generally, these programs should 
+There are a few possible exceptions to the application of DEP on a process. The first is for those processes that use Just In Time (JIT) Compilers, as these may compile and write code into the memory of the process space and then attempt to execute it. If the region the JIT compiler writes to is not properly managed and the protections of the page used are not set to allow execution (With `VirtualProtect(...)`), then there will be issues when running the program as exceptions will be raised when the system attempts to execute that code [2] [4]. An additional thing to note is that some binaries may place chunks of executable code in a data section, these are referred to as *thunks* which are generally small pieces of code that take some small action and then jump to an intended target [4]. Generally, these programs should mark these regions as executable in order to maintain functionality, however if they do not do this the program will crash. 
 
 If you do make a region of memory executable when allocating it with `VirtualAlloc(...)`, or if you mark an existing region of memory as executable using `VirtualProtect(...)`, then you should be sure to remove write permissions when possible. This is because if we make a writable and executable region of memory that can be accessed by an attacker, as we have seen throughout the VChat functions, it can be quite dangerous as it can allow and enable arbitrary code execution.
 
@@ -70,8 +69,8 @@ If you would like you can modify the DEP policy of a Windows machine using the f
 ```
 $ bcdedit /set nx AlwaysOn
 ```
-* `bcdedit`: CLI tool to configure Boot Configuration File
-* `/set nx`: Set NX (DEP) boot configuration
+* `bcdedit`: CLI tool to configure Boot Configuration File.
+* `/set nx`: Set NX (DEP) boot configuration.
 * `AlwaysOn` Set to always on (Forces all processes to have DEP), this can be replaced.
 
 > [!IMPORTANT]
@@ -81,11 +80,11 @@ $ bcdedit /set nx AlwaysOn
 Before modifying your system settings, make sure you have all of the required keys, such as a *BitLocker key*, in order to successfully boot into the system once you make these changes!
 
 #### Settings menu
-1. Open Windows Security Settings
+1. Open Windows Security Settings.
 
     <img src="Images/S1.png">
 
-2. Open App & Browser Control, Navigate to Exploit Protection Settings
+2. Open App & Browser Control, Navigate to Exploit Protection Settings.
 
     <img src="Images/S2.png">
 
@@ -200,7 +199,7 @@ The [`wbmtest`](https://learn.microsoft.com/en-us/mem/configmgr/develop/core/und
 
     <img src="Images/E5.png">
 
-2. Enter `wbemtest`, and click *Ok*
+2. Enter `wbemtest`, and click *Ok*.
 
     <img src="Images/E6.png">
 
